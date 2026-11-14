@@ -1,0 +1,47 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Disable code signing in ios/build.gradle
+        run: |
+          cat << 'EOF' >> ios/build.gradle
+
+          robovm {
+              iosSkipSigning = true
+          }
+          EOF
+
+      - name: Build unsigned iOS app bundle
+        run: ./gradlew ios:robovmInstall -Probovm.arch=arm64 -Probovm.os=ios
+
+      - name: Package .app into .ipa
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find ios/build -name "*.app" -type d | head -n 1)
+          echo "Found app bundle at: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
+          zip -r ShatteredPixelDungeon-unsigned.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShatteredPixelDungeon-iOS
+          path: ShatteredPixelDungeon-unsigned.ipa
