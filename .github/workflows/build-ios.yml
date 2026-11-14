@@ -27,23 +27,28 @@ jobs:
             printf "\nrobovm {\n    iosSkipSigning = true\n}\n" >> ios/build.gradle
           fi
 
-      - name: Compile unsigned iOS .app bundle
-        run: ./gradlew ios:build -Probovm.arch=arm64 -Probovm.os=ios --no-daemon
+      - name: Compile iOS IPA via RoboVM
+        run: ./gradlew ios:createIPA -Probovm.arch=arm64 -Probovm.os=ios -Probovm.iosSkipSigning=true --no-daemon
 
-      - name: Package .app into .ipa
+      - name: Locate and verify IPA
         run: |
           set -e
-          APP_PATH=$(find ios/build -type d -name "*.app" 2>/dev/null | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Could not find .app bundle under ios/build. Listing build directories:"
-            find ios/build -maxdepth 8 -type d 2>/dev/null || true
-            exit 1
+          IPA_PATH=$(find . -name "*.ipa" | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No .ipa found, checking for .app bundle..."
+            APP_PATH=$(find . -name "*.app" -type d | head -n 1)
+            if [ -z "$APP_PATH" ]; then
+              echo "Listing all build outputs:"
+              find ios -maxdepth 4
+              exit 1
+            fi
+            mkdir -p Payload
+            cp -r "$APP_PATH" Payload/
+            zip -r -9 ShatteredPixelDungeon.ipa Payload
+          else
+            echo "Found IPA at: $IPA_PATH"
+            cp "$IPA_PATH" ShatteredPixelDungeon.ipa
           fi
-          echo "Found compiled app at: $APP_PATH"
-          rm -rf Payload ShatteredPixelDungeon.ipa
-          mkdir -p Payload
-          cp -r "$APP_PATH" Payload/
-          zip -r -9 ShatteredPixelDungeon.ipa Payload
           ls -lh ShatteredPixelDungeon.ipa
 
       - name: Upload IPA Artifact
